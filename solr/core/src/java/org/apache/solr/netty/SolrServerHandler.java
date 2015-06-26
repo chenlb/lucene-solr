@@ -29,8 +29,7 @@ import org.slf4j.LoggerFactory;
 import java.util.concurrent.RejectedExecutionException;
 
 public class SolrServerHandler extends SimpleChannelInboundHandler<SolrProtocol.SolrRequest> {
-  private static final Logger logger = LoggerFactory
-      .getLogger(SolrServerHandler.class);
+  private static final Logger logger = LoggerFactory.getLogger(SolrServerHandler.class);
 
   private final CoreContainer coreContainer;
   private final RequestExecutor queryExecutor;
@@ -68,11 +67,9 @@ public class SolrServerHandler extends SimpleChannelInboundHandler<SolrProtocol.
 
     try {
       // solr execute request in thread pool
-      if(Vootoo.isUpdateRequest(solrRequest.getPath())) {
-        solrTask.setIsUpdate(true);
+      if(solrTask.isUpdate()) {
         updateExecutor.submitTask(solrTask, SolrProtocol.SolrResponse.class);
       } else {// query request
-        solrTask.setIsUpdate(false);
         queryExecutor.submitTask(solrTask, SolrProtocol.SolrResponse.class);
       }
     } catch (RejectedExecutionException e) {
