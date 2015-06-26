@@ -1,0 +1,58 @@
+package org.apache.solr.netty;
+
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import org.apache.solr.client.solrj.SolrServerException;
+import org.apache.solr.client.solrj.response.QueryResponse;
+import org.apache.solr.client.solrj.response.UpdateResponse;
+import org.apache.solr.common.SolrInputDocument;
+import org.junit.Test;
+
+import java.io.IOException;
+
+import static org.junit.Assert.*;
+
+public class SolrServerHandlerTest extends NettySolrTestCaseJ4 {
+
+
+  @Test
+  public void test_query() throws InterruptedException, IOException,
+      SolrServerException {
+    String id = addTestDoc();
+
+    QueryResponse queryResponse = solrClient.query("collection1", createIdQuery(id));
+
+    assertIdResult(queryResponse, id);
+  }
+
+  @Test
+  public void test_update_add() throws IOException, SolrServerException {
+    String id = createDocId();
+
+    SolrInputDocument sid = new SolrInputDocument();
+    sid.addField("id", id);
+
+    UpdateResponse addResp = solrClient.add("collection1", sid);
+
+    //System.out.println(addResp);
+
+    assertU(commit());
+
+    assertQueryId(id);
+  }
+}

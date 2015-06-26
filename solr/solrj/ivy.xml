@@ -37,6 +37,10 @@
     <dependency org="org.noggit" name="noggit" rev="${/org.noggit/noggit}" conf="compile"/>
     <dependency org="org.slf4j" name="slf4j-api" rev="${/org.slf4j/slf4j-api}" conf="compile"/>
 
+    <dependency org="io.netty" name="netty-all" rev="${/io.netty/netty-all}" conf="compile"/>
+    <dependency org="com.google.protobuf" name="protobuf-java" rev="${/com.google.protobuf/protobuf-java}" conf="compile"/>
+    <dependency org="com.google.guava" name="guava" rev="${/com.google.guava/guava}" conf="compile"/>
+
     <dependency org="org.slf4j" name="jcl-over-slf4j" rev="${/org.slf4j/jcl-over-slf4j}" conf="test"/>
     <dependency org="org.slf4j" name="slf4j-log4j12" rev="${/org.slf4j/slf4j-log4j12}" conf="test"/>
 
