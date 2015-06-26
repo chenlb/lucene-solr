@@ -26,6 +26,8 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Properties;
@@ -49,6 +51,7 @@ import org.apache.solr.core.NodeConfig;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.core.SolrResourceLoader;
 import org.apache.solr.core.SolrXmlConfig;
+import org.apache.solr.netty.SolrNettyServer;
 import org.apache.solr.security.AuthenticationPlugin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,6 +69,8 @@ public class SolrDispatchFilter extends BaseSolrFilter {
   protected String abortErrorMessage = null;
   protected final CloseableHttpClient httpClient = HttpClientUtil.createClient(new ModifiableSolrParams());
   private ArrayList<Pattern> excludePatterns;
+
+  protected volatile SolrNettyServer nettyServer;
 
   /**
    * Enum to define action that needs to be processed.
@@ -85,6 +90,8 @@ public class SolrDispatchFilter extends BaseSolrFilter {
   public static final String PROPERTIES_ATTRIBUTE = "solr.properties";
 
   public static final String SOLRHOME_ATTRIBUTE = "solr.solr.home";
+
+  public static final String NETTY_PROPERTIES = "netty.properties";
   
   @Override
   public void init(FilterConfig config) throws ServletException
@@ -126,6 +133,8 @@ public class SolrDispatchFilter extends BaseSolrFilter {
         throw (Error) t;
       }
     }
+
+    initNettyServer(cores);
 
     log.info("SolrDispatchFilter.init() done");
   }
@@ -181,6 +190,7 @@ public class SolrDispatchFilter extends BaseSolrFilter {
   
   @Override
   public void destroy() {
+    destroyNettyServer();
     try {
       if (cores != null) {
         cores.shutdown();
@@ -275,5 +285,56 @@ public class SolrDispatchFilter extends BaseSolrFilter {
       return false;
     }
     return true;
+  }
+
+
+  protected void initNettyServer(CoreContainer cores) {
+    String solrHome = cores.getSolrHome();
+    //load netty properties
+    Properties nettyP = new Properties();
+    File nettyProp = new File(solrHome, NETTY_PROPERTIES);
+    if(nettyProp != null && nettyProp.isFile() && nettyProp.canRead()) {
+      try {
+        nettyP.load(new FileInputStream(nettyProp));
+      } catch (IOException e) {
+        log.warn("loading from="+nettyProp.getAbsolutePath()+" is fail, ignore netty properties", e);
+      }
+    }
+
+    String nettyPStr = System.getProperty("netty.port");
+    if(nettyPStr != null) {
+      // overwrite netty.properties at solr home
+      nettyP.put("port", nettyPStr);
+    }
+
+    Integer nettyPort = null;
+    try {
+      String nettyPortStr = nettyP.getProperty("port");
+      if(nettyPortStr != null) {
+        nettyPort = Integer.parseInt(nettyPortStr);
+      }
+    } catch (NumberFormatException e) {}
+
+    if(nettyPort != null) {
+      // start netty
+      //TODO set many netty properties
+      nettyServer = new SolrNettyServer(getCores(), nettyPort);
+      try {
+        nettyServer.startServer(false);
+      } catch (Exception e) {
+        nettyServer = null;
+        log.error("start netty server error", e);
+      }
+    }
+  }
+
+  protected void destroyNettyServer() {
+    if(nettyServer != null) {
+      try {
+        nettyServer.stopServer();
+      } catch (Exception e) {
+        log.error("netty server stop error", e);
+      }
+    }
   }
 }
