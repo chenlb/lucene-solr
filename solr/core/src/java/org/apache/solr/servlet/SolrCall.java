@@ -20,7 +20,6 @@ package org.apache.solr.servlet;
 import org.apache.commons.lang.StringUtils;
 import org.apache.http.HttpStatus;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
-import org.apache.solr.cloud.CloudDescriptor;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.cloud.*;
 import org.apache.solr.common.params.CommonParams;
@@ -31,7 +30,7 @@ import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.SolrConfig;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.handler.ContentStreamHandlerBase;
-import org.apache.solr.logging.MDCUtils;
+import org.apache.solr.logging.MDCLoggingContext;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.request.SolrRequestHandler;
 import org.apache.solr.request.SolrRequestInfo;
@@ -42,7 +41,6 @@ import org.apache.solr.security.AuthorizationContext;
 import org.apache.solr.security.AuthorizationContext.CollectionRequest;
 import org.apache.solr.security.AuthorizationContext.RequestType;
 import org.apache.solr.security.AuthorizationResponse;
-import org.apache.solr.servlet.cache.HttpCacheHeaderUtil;
 import org.apache.solr.servlet.cache.Method;
 import org.apache.solr.update.processor.DistributingUpdateProcessorFactory;
 import org.apache.solr.util.RTimer;
@@ -197,6 +195,14 @@ public abstract class SolrCall {
         core = cores.getCore(corename);
         if (core != null) {
           path = path.substring(idx);
+        } else if (cores.isCoreLoading(corename)) { // extra mem barriers, so don't look at this before trying to get core
+          throw new SolrException(SolrException.ErrorCode.SERVICE_UNAVAILABLE, "SolrCore is loading");
+        } else {
+          // the core may have just finished loading
+          core = cores.getCore(corename);
+          if (core != null) {
+            path = path.substring(idx);
+          }
         }
       }
       if (core == null) {
@@ -206,15 +212,12 @@ public abstract class SolrCall {
       }
     }
 
-    if (core != null) addMDCValues();
-
     if (core == null && cores.isZooKeeperAware()) {
       // we couldn't find the core - lets make sure a collection was not specified instead
       core = getCoreByCollection(corename);
       if (core != null) {
         // we found a core, update the path
         path = path.substring(idx);
-        addMDCValues();
         if (collectionsList == null)
           collectionsList = new ArrayList<>();
         collectionsList.add(corename);
@@ -227,12 +230,12 @@ public abstract class SolrCall {
       // try the default core
       if (core == null) {
         core = cores.getCore("");
-        if (core != null) addMDCValues();
       }
     }
 
     // With a valid core...
     if (core != null) {
+      MDCLoggingContext.setCore(core);
       config = core.getSolrConfig();
       // get or create/cache the parser for the core
       SolrRequestParsers parser = config.getRequestParsers();
@@ -346,15 +349,12 @@ public abstract class SolrCall {
    * This method processes the request.
    */
   public Action call() {
-    MDCUtils.clearMDC();
+    MDCLoggingContext.reset();
+    MDCLoggingContext.setNode(cores);
 
     if (cores == null) {
       sendError(503, "Server is shutting down or failed to initialize");
       return RETURN;
-    }
-
-    if (cores.isZooKeeperAware()) {
-      MDC.put(NODE_NAME_PROP, cores.getZkController().getNodeName());
     }
 
     if (abortErrorMessage() != null) {
@@ -405,6 +405,8 @@ public abstract class SolrCall {
         t = t.getCause();
       }
       return RETURN;
+    } finally {
+      MDCLoggingContext.clear();
     }
 
   }
@@ -432,16 +434,6 @@ public abstract class SolrCall {
   protected abstract void sendError(Throwable ex);
 
   protected abstract void sendError(int code, String message);
-
-  protected void addMDCValues() {
-    MDCUtils.setCore(core.getName());
-    if (cores.isZooKeeperAware()) {
-      CloudDescriptor cloud = core.getCoreDescriptor().getCloudDescriptor();
-      MDCUtils.setCollection(cloud.getCollectionName());
-      MDCUtils.setShard(cloud.getShardId());
-      MDCUtils.setReplica(cloud.getCoreNodeName());
-    }
-  }
 
   protected abstract String requestContextPath();
 

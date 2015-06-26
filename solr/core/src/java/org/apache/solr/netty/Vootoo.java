@@ -18,13 +18,12 @@ package org.apache.solr.netty;
  */
 
 import org.apache.commons.lang.StringUtils;
-import org.apache.solr.cloud.CloudDescriptor;
 import org.apache.solr.common.cloud.*;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.util.StrUtils;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.SolrCore;
-import org.apache.solr.logging.MDCUtils;
+import org.apache.solr.logging.MDCLoggingContext;
 import org.apache.solr.request.SolrQueryRequest;
 
 import java.util.*;
@@ -59,13 +58,7 @@ public class Vootoo {
   }
 
   public static void addMDCValues(CoreContainer cores, SolrCore core) {
-    MDCUtils.setCore(core.getName());
-    if (cores.isZooKeeperAware()) {
-      CloudDescriptor cloud = core.getCoreDescriptor().getCloudDescriptor();
-      MDCUtils.setCollection(cloud.getCollectionName());
-      MDCUtils.setShard(cloud.getShardId());
-      MDCUtils.setReplica(cloud.getCoreNodeName());
-    }
+    MDCLoggingContext.setCoreDescriptor(core.getCoreDescriptor());
   }
 
   public static Map<String , Integer> checkStateIsValid(CoreContainer cores, String stateVer) {
