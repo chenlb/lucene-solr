@@ -17,6 +17,11 @@ package org.apache.solr.netty;
  * limitations under the License.
  */
 
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
+
+import org.apache.commons.lang.StringUtils;
 import org.apache.solr.client.solrj.impl.netty.NettySolrException;
 import org.apache.solr.client.solrj.impl.netty.ProtobufRequestGetter;
 import org.apache.solr.client.solrj.impl.netty.protocol.SolrProtocol;
@@ -24,30 +29,31 @@ import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.core.CoreContainer;
-import org.apache.solr.servlet.NettySolrCall;
+import org.apache.solr.core.SolrCore;
 import org.apache.solr.servlet.NettySolrDispatcher;
-import org.apache.solr.servlet.SolrCall;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
-
 public abstract class SolrRequestRunner implements Runnable {
 
-  private static final Logger logger = LoggerFactory
-      .getLogger(SolrRequestRunner.class);
-  private static final Logger queryLogger = LoggerFactory
-      .getLogger(Vootoo.requestLogName("Query"));
-  private static final Logger updateLogger = LoggerFactory
-      .getLogger(Vootoo.requestLogName("Update"));
-  private static final Logger rejectedLogger = LoggerFactory
-      .getLogger(Vootoo.requestLogName("Rejected"));
+  private static final Logger logger = LoggerFactory.getLogger(SolrRequestRunner.class);
+  private static final Logger queryLogger = LoggerFactory.getLogger(SolrCore.class.getName() + ".Request.Query");
+  private static final Logger updateLogger = LoggerFactory.getLogger(SolrCore.class.getName() + ".Request.Update");
+  private static final Logger rejectedLogger = LoggerFactory.getLogger(SolrCore.class.getName() + ".Request.Rejected");
+
+  private static final String UPDATE_PATH = "/update";
+  private static final String UPDATE_PREFIX = "/update/";
+  private static final String MDC_NAME_RID = "rid";
+  private static final String MDC_NAME_REQUEST_SIZE = "request_size";
+  private static final String MDC_NAME_REQUEST_PATH = "request_path";
+  private static final String MDC_NAME_EXECUTE_TIME = "execute_time";
+  private static final String MDC_NAME_WAIT_TIME = "wait_time";
+  private static final String MDC_NAME_REMOTE_ADDRESS = "remote_address";//remoteAddress
 
   private CoreContainer coreContainer;
   private ProtobufRequestGetter solrRequest;
+
   private boolean isUpdate = false;
 
   private int queryDefaultTimeout = 2000;
@@ -55,34 +61,35 @@ public abstract class SolrRequestRunner implements Runnable {
   public SolrRequestRunner(CoreContainer coreContainer, ProtobufRequestGetter solrRequest) {
     this.coreContainer = coreContainer;
     this.solrRequest = solrRequest;
+    isUpdate = isUpdateRequest(solrRequest.getPath());
   }
 
   protected void putMDC() {
-    MDC.put(Vootoo.MDC_NAME_RID, String.valueOf(solrRequest.getRid()));
-    MDC.put(Vootoo.MDC_NAME_REQUEST_SIZE,
+    MDC.put(MDC_NAME_RID, String.valueOf(solrRequest.getRid()));
+    MDC.put(MDC_NAME_REQUEST_SIZE,
         String.valueOf(solrRequest.requestSize()));
-    MDC.put(Vootoo.MDC_NAME_REQUEST_PATH, solrRequest.getPath());
+    MDC.put(MDC_NAME_REQUEST_PATH, solrRequest.getPath());
   }
 
   protected void putMDCWithExecuteTime(long executeTime) {
-    MDC.put(Vootoo.MDC_NAME_EXECUTE_TIME, String.valueOf(executeTime));
+    MDC.put(MDC_NAME_EXECUTE_TIME, String.valueOf(executeTime));
   }
 
   protected void putMDCWithWaitTime(long waitTime) {
-    MDC.put(Vootoo.MDC_NAME_WAIT_TIME, String.valueOf(waitTime));
+    MDC.put(MDC_NAME_WAIT_TIME, String.valueOf(waitTime));
   }
 
   protected void putMDCWithRemoteAddress(String remoteAddress) {
-    MDC.put(Vootoo.MDC_NAME_REMOTE_ADDRESS, remoteAddress);
+    MDC.put(MDC_NAME_REMOTE_ADDRESS, remoteAddress);
   }
 
   protected void clearMDC() {
-    MDC.remove(Vootoo.MDC_NAME_RID);
-    MDC.remove(Vootoo.MDC_NAME_REQUEST_SIZE);
-    MDC.remove(Vootoo.MDC_NAME_REQUEST_PATH);
-    MDC.remove(Vootoo.MDC_NAME_EXECUTE_TIME);
-    MDC.remove(Vootoo.MDC_NAME_WAIT_TIME);
-    MDC.remove(Vootoo.MDC_NAME_REMOTE_ADDRESS);
+    MDC.remove(MDC_NAME_RID);
+    MDC.remove(MDC_NAME_REQUEST_SIZE);
+    MDC.remove(MDC_NAME_REQUEST_PATH);
+    MDC.remove(MDC_NAME_EXECUTE_TIME);
+    MDC.remove(MDC_NAME_WAIT_TIME);
+    MDC.remove(MDC_NAME_REMOTE_ADDRESS);
   }
 
   protected abstract String getSocketAddress();
@@ -180,7 +187,14 @@ public abstract class SolrRequestRunner implements Runnable {
     rejectedLogger.warn("tip={} params={{}}", "Request_Rejected", solrRequest.getSolrParams());
   }
 
-  public void setIsUpdate(boolean isUpdate) {
-    this.isUpdate = isUpdate;
+  public boolean isUpdate() {
+    return isUpdate;
+  }
+
+  private static boolean isUpdateRequest(String path) {
+    if(StringUtils.isBlank(path)) {
+      return false;
+    }
+    return UPDATE_PATH.equals(path) || path.startsWith(UPDATE_PREFIX);
   }
 }
